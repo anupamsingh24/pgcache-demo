@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: ${SPRING_APPLICATION_NAME:pgcache-demo}
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/pgcache_demo}
+    username: ${SPRING_DATASOURCE_USERNAME:demo}
+    password: ${SPRING_DATASOURCE_PASSWORD:demo}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    org.springframework.jdbc.core: WARN

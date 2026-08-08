@@ -1,0 +1,82 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: pgcache_demo
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_replication_slots=10", "-c", "max_wal_senders=10"]
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d pgcache_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  pgcache:
+    image: pgcache/pgcache:latest
+    command: ["--upstream", "postgres://demo:demo@postgres:5432/pgcache_demo"]
+    ports:
+      - "5432:5432"
+      - "9090:9090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    environment:
+      DATA_SOURCE_NAME: "postgresql://demo:demo@postgres:5432/pgcache_demo?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app-baseline:
+    build: ./app
+    environment:
+      SPRING_APPLICATION_NAME: app-baseline
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pgcache_demo
+      SPRING_DATASOURCE_USERNAME: demo
+      SPRING_DATASOURCE_PASSWORD: demo
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app-cached:
+    build: ./app
+    environment:
+      SPRING_APPLICATION_NAME: app-cached
+      SPRING_DATASOURCE_URL: jdbc:postgresql://pgcache:5432/pgcache_demo
+      SPRING_DATASOURCE_USERNAME: demo
+      SPRING_DATASOURCE_PASSWORD: demo
+    ports:
+      - "8082:8080"
+    depends_on:
+      - pgcache
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9091:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
