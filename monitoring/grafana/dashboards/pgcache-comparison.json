@@ -1,0 +1,92 @@
+{
+  "title": "PgCache: baseline vs cached",
+  "uid": "pgcache-demo",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "timezone": "browser",
+  "time": { "from": "now-15m", "to": "now" },
+  "refresh": "5s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request latency, p95 (baseline vs cached)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": {} }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[1m])) by (le, application))",
+          "legendFormat": "{{application}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Request throughput (baseline vs cached)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": {} }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+          "expr": "sum(rate(http_server_requests_seconds_count[1m])) by (application)",
+          "legendFormat": "{{application}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "PgCache cache hit vs miss rate",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": {} }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+          "expr": "rate(pgcache_queries_cache_hit[1m])",
+          "legendFormat": "cache hit"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+          "expr": "rate(pgcache_queries_cache_miss[1m])",
+          "legendFormat": "cache miss"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "PgCache CDC lag",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": {} }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+          "expr": "pgcache_cdc_lag_seconds",
+          "legendFormat": "cdc lag"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Origin Postgres active connections",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": {} }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+          "expr": "sum(pg_stat_activity_count{datname=\"pgcache_demo\"}) by (state)",
+          "legendFormat": "{{state}}"
+        }
+      ]
+    }
+  ]
+}
