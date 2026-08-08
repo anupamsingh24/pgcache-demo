@@ -1,0 +1,27 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: pgcache-demo
+nodes:
+  - role: control-plane
+    # Map NodePort services to host ports so the demo endpoints are reachable
+    # from the host exactly like the docker-compose setup was.
+    extraPortMappings:
+      - containerPort: 30081   # app-baseline
+        hostPort: 8081
+        protocol: TCP
+      - containerPort: 30082   # app-cached
+        hostPort: 8082
+        protocol: TCP
+      - containerPort: 30091   # prometheus
+        hostPort: 9091
+        protocol: TCP
+      - containerPort: 30300   # grafana
+        hostPort: 3000
+        protocol: TCP
+      - containerPort: 30432   # pgcache (cached DB path)
+        hostPort: 5432
+        protocol: TCP
+      - containerPort: 30433   # postgres (origin, for the consistency demo)
+        hostPort: 5433
+        protocol: TCP
+

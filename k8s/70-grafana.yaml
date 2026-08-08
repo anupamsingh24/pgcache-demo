@@ -1,0 +1,209 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: pgcache-demo
+data:
+  datasource.yml: |
+    apiVersion: 1
+
+    datasources:
+      - name: Prometheus
+        uid: prometheus-ds
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+  namespace: pgcache-demo
+data:
+  dashboards.yml: |
+    apiVersion: 1
+
+    providers:
+      - name: pgcache-demo
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 30
+        allowUiUpdates: true
+        options:
+          path: /etc/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: pgcache-demo
+data:
+  pgcache-comparison.json: |
+    {
+      "title": "PgCache: baseline vs cached",
+      "uid": "pgcache-demo",
+      "schemaVersion": 39,
+      "version": 1,
+      "editable": true,
+      "timezone": "browser",
+      "time": { "from": "now-15m", "to": "now" },
+      "refresh": "5s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Request latency, p95 (baseline vs cached)",
+          "type": "timeseries",
+          "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "fieldConfig": { "defaults": { "unit": "s", "custom": {} }, "overrides": [] },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+              "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[1m])) by (le, application))",
+              "legendFormat": "{{application}}"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Request throughput (baseline vs cached)",
+          "type": "timeseries",
+          "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "fieldConfig": { "defaults": { "unit": "reqps", "custom": {} }, "overrides": [] },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+              "expr": "sum(rate(http_server_requests_seconds_count[1m])) by (application)",
+              "legendFormat": "{{application}}"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "PgCache cache hit vs miss rate",
+          "type": "timeseries",
+          "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "fieldConfig": { "defaults": { "unit": "ops", "custom": {} }, "overrides": [] },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+              "expr": "rate(pgcache_queries_cache_hit[1m])",
+              "legendFormat": "cache hit"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+              "expr": "rate(pgcache_queries_cache_miss[1m])",
+              "legendFormat": "cache miss"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "PgCache CDC lag",
+          "type": "timeseries",
+          "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "fieldConfig": { "defaults": { "unit": "s", "custom": {} }, "overrides": [] },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+              "expr": "pgcache_cdc_lag_seconds",
+              "legendFormat": "cdc lag"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "Origin Postgres active connections",
+          "type": "timeseries",
+          "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": {} }, "overrides": [] },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+              "expr": "sum(pg_stat_activity_count{datname=\"pgcache_demo\"}) by (state)",
+              "legendFormat": "{{state}}"
+            }
+          ]
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: pgcache-demo
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:latest
+          env:
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: admin
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: Admin
+          ports:
+            - containerPort: 3000
+              name: http
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /etc/grafana/dashboards
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboard-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: pgcache-demo
+  labels:
+    app: grafana
+spec:
+  type: NodePort
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      nodePort: 30300

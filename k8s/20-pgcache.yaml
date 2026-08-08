@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgcache
+  namespace: pgcache-demo
+  labels:
+    app: pgcache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pgcache
+  template:
+    metadata:
+      labels:
+        app: pgcache
+    spec:
+      initContainers:
+        # Wait for the origin Postgres to accept connections before starting.
+        - name: wait-for-postgres
+          image: postgres:16
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h postgres -p 5432 -U demo; do
+                echo "waiting for postgres..."; sleep 2;
+              done
+      containers:
+        - name: pgcache
+          image: pgcache/pgcache:latest
+          args:
+            - "--upstream"
+            - "postgres://demo:demo@postgres:5432/pgcache_demo"
+          ports:
+            - containerPort: 5432
+              name: db
+            - containerPort: 9090
+              name: metrics
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgcache
+  namespace: pgcache-demo
+  labels:
+    app: pgcache
+spec:
+  # NodePort on the DB port so a host client can hit the cached path directly.
+  type: NodePort
+  selector:
+    app: pgcache
+  ports:
+    - name: db
+      port: 5432
+      targetPort: 5432
+      nodePort: 30432
+    - name: metrics
+      port: 9090
+      targetPort: 9090

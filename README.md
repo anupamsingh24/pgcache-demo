@@ -69,6 +69,9 @@ difference is which JDBC URL they're pointed at.
 docker compose up -d --build
 ```
 
+> **Prefer Kubernetes?** The same stack is packaged for a local [kind](https://kind.sigs.k8s.io/)
+> cluster under [`k8s/`](k8s/README.md) — run `./k8s/deploy.sh` and get the exact same host ports.
+
 First boot seeds the origin database (a few hundred thousand rows) — give it 30–60s. Check:
 
 ```bash
